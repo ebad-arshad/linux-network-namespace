@@ -1,0 +1,63 @@
+Linux Networking Namespace: Network namespaces in Linux provide a powerful form of virtualization, allowing the creation of isolated network environments within a single host. These namespaces are essential for containerization, network testing, and security segmentation, making them a cornerstone of modern infrastructure management. They provide the capability to encapsulate network devices, interfaces, routing tables, and firewall rules, and offering a robust framework for building complex networking solutions.
+
+
+sudo ip netns add node-alpha
+sudo ip netns add node-beta
+sudo ip link add name br0 type bridge
+sudo ip addr add 172.20.0.1/24 dev br0
+sudo ip link set dev br0 up
+
+sudo ip link add veth-alpha-br type veth peer name veth-alpha netns node-alpha
+sudo ip link set veth-alpha-br up
+sudo ip netns exec node-alpha ip link set veth-alpha up
+sudo ip netns exec node-alpha ip addr add 172.20.0.10/24 dev veth-alpha
+sudo ip link set veth-alpha-br master br0
+sudo ip netns exec node-alpha ip link set lo up
+sudo ip link set lo up
+
+sudo ip link add veth-beta-br type veth peer name veth-beta netns node-beta
+sudo ip link set veth-beta-br up
+sudo ip netns exec node-beta ip link set veth-beta up
+sudo ip netns exec node-beta ip addr add 172.20.0.20/24 dev veth-beta
+sudo ip link set veth-beta-br master br0
+sudo ip netns exec node-beta ip link set lo up
+sudo ip link set lo up
+
+sudo ip netns exec node-alpha ip route add default via 172.20.0.1
+
+sudo ip netns exec node-beta ip route add default via 172.20.0.1
+
+sudo sysctl -w net.ipv4.ip_forward=1
+
+ip route | grep default
+
+sudo iptables -t nat -A POSTROUTING -s 172.20.0.0/24 -o enp8s0 -j MASQUERADE
+
+sudo ip netns exec node-alpha python3 -m http.server 8080
+
+sudo iptables -A FORWARD -i br0 -o enp8s0 -j ACCEPT
+
+sudo iptables -A FORWARD -i enp8s0 -o br0 -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+
+sudo ip netns exec node-alpha ping -nc 2 8.8.8.8
+
+ip addr | grep -w inet
+
+sudo iptables -t nat -A PREROUTING -p tcp -d 192.168.1.50 --dport 9090 -j DNAT --to-destination 172.20.0.10:8080
+
+sudo iptables -t nat -A OUTPUT -p tcp -d 192.168.1.50 --dport 9090 -j DNAT --to-destination 172.20.0.10:8080
+
+sudo iptables -A FORWARD -p tcp -d 172.20.0.10 --dport 8080 -j ACCEPT
+
+sudo ip netns exec node-alpha python3 -m http.server 8080
+
+curl 192.168.1.50:9090
+
+sudo mkdir -p /etc/netns/node-alpha
+sudo mkdir -p /etc/netns/node-beta
+
+echo "nameserver 8.8.8.8" | sudo tee /etc/netns/node-alpha/resolv.conf
+echo "nameserver 1.1.1.1" | sudo tee /etc/netns/node-beta/resolv.conf
+
+sudo ip netns exec node-alpha curl -I https://google.com
+sudo ip netns exec node-beta curl -I https://google.com
