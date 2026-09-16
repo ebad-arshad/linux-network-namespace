@@ -36,6 +36,11 @@ The virtual network architecture isolates two distinct network environments (`no
 
 ---
 
+## Diagram
+![Diagram](diagram.png)
+
+---
+
 ## 2. Functional Requirements Implementation
 
 ### Requirement 1: Namespace Isolation
